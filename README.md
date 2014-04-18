@@ -29,7 +29,9 @@ grunt.initConfig({
       // Task-specific options go here.
     },
     your_target: {
-      // Target-specific file lists and/or options go here.
+      options: {
+        // Target-specific file lists and/or options go here.
+      }
     },
   },
 });
@@ -37,48 +39,93 @@ grunt.initConfig({
 
 ### Options
 
-#### options.separator
+#### options.knappsackHost
 Type: `String`
-Default value: `',  '`
+Required
 
-A string value that is used to do something with whatever.
+The hostname where knappsack is hosted
 
-#### options.punctuation
+#### options.knappsackPort
+Type: `Integer`
+Optional
+
+The Network port to access knappsack
+
+#### options.knappsackPath
 Type: `String`
-Default value: `'.'`
+Optional
 
-A string value that is used to do something else with whatever else.
+The root path to access knappsack
+
+#### options.username
+Type: `String`
+Required
+
+The username to use for authenticating with knappsack
+
+#### options.password
+Type: `String`
+Required
+
+The password to use for authenticating with knappsack
+
+#### options.applicationId
+Type: `Integer`
+Required
+
+The knappsack applicaitonId of the app to upload a version of
+
+#### options.appState
+Type: `String`
+Default: `GROUP_PUBLISH`
+
+The state of the version after its been uploaded. valid values are:`GROUP_PUBLISH`, `ORGANIZATION_PUBLISH`, `DISABLED`, `ORG_PUBLISH_REQUEST`, `RESIGNING`
+
+#### options.versionName
+Type: `String`
+Required
+
+The name of the version being uploaded. The plugin will query knappsack for current versions of the app. If any match the versionName provided the plugin will append a (#<number>) to the end of the versionName
+
+#### options.recentChanges
+Type: `String` or `Function`
+Default ` `
+
+Any notes or description you want to include with the version being uploaded
+
+#### options.file
+Type: `String`
+Required
+
+The path to the file being uploaded
 
 ### Usage Examples
 
-#### Default Options
-In this example, the default options are used to do something with whatever. So if the `testing` file has the content `Testing` and the `123` file had the content `1 2 3`, the generated result would be `Testing, 1 2 3.`
-
 ```js
-grunt.initConfig({
-  knappsack: {
-    options: {},
-    files: {
-      'dest/default_options': ['src/testing', 'src/123'],
-    },
-  },
-});
-```
+var gitRev = require('git-rev');
 
-#### Custom Options
-In this example, custom options are used to do something else with whatever else. So if the `testing` file has the content `Testing` and the `123` file had the content `1 2 3`, the generated result in this case would be `Testing: 1 2 3 !!!`
-
-```js
 grunt.initConfig({
   knappsack: {
     options: {
-      separator: ': ',
-      punctuation: ' !!!',
+      knappsackHost: 'http://mydomain.com',
+      knappsackPort: 9090,
+      knappsackPath: '/knappsack',
+      username: 'dev@mydomain.com',
+      password: 'knappsack_rocks!'
     },
-    files: {
-      'dest/default_options': ['src/testing', 'src/123'],
-    },
-  },
+    android: {
+      options: {
+        applicationId: 42,
+        versionName: '1.0',
+        recentChanges: function(done) { // you can use async function.
+          gitRev.long(function(hash) {
+            done("commit " + hash);
+          });
+        },
+        file: 'android.apk'
+      }
+    }
+  }
 });
 ```
 
