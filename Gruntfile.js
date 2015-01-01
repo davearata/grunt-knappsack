@@ -8,8 +8,6 @@
 
 'use strict';
 
-require('./test/test_helper');
-
 module.exports = function (grunt) {
 
   // Project configuration.
