@@ -175,8 +175,8 @@ function authenticate(options) {
   var maxRetries = options.retries || 1;
 
   function fail(reason) {
-    log.error('Failed authentication. ' + tryCount - 1 + ' retries. Reason: ' + reason);
     deferred.reject();
+    log.error('Failed authentication. ' + tryCount - 1 + ' retries. Reason: ' + reason);
   }
 
   function callServer() {
@@ -228,13 +228,13 @@ function doesVersionExistOnServer(options, accessToken) {
   };
 
   function fail(reason) {
+    deferred.reject();
+
     if (!!reason) {
       log.error('Failed checking versions on server: ' + reason);
     } else {
       log.error('Failed checking versions on server');
     }
-
-    deferred.reject();
   }
 
   function onVersionResponse(response, content) {
