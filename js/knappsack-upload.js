@@ -180,36 +180,27 @@ function authenticate(options) {
   }
 
   function callServer() {
-    http.get(authenticateUrl, function (response) {
+    function onAuthResponse(response, content) {
       try {
-        var str = '';
-        response.on('data', function (chunk) {
-          str += chunk;
-        });
+        if (response.statusCode !== 200) {
+          log.error('Authenticating failed with status ' + response.statusCode);
 
-        response.on('end', function onResponse() {
-          try {
-            if (response.statusCode !== 200) {
-              log.error('Authenticating failed with status ' + response.statusCode);
-
-              if (tryCount++ < maxRetries) {
-                log.writeln('Retrying authentication (' + tryCount + ')');
-                callServer();
-              } else {
-                deferred.reject();
-              }
-            } else {
-              var authResponse = JSON.parse(str);
-              deferred.resolve(authResponse.access_token);
-            }
-          } catch (e) {
-            fail(e);
+          if (tryCount++ < maxRetries) {
+            log.writeln('Retrying authentication (' + tryCount + ')');
+            callServer();
+          } else {
+            deferred.reject();
           }
-        });
+        } else {
+          var authResponse = JSON.parse(content);
+          deferred.resolve(authResponse.access_token);
+        }
       } catch (e) {
         fail(e);
       }
-    }).on('error', function (e) {
+    }
+
+    httpGet(authenticateUrl, onAuthResponse).on('error', function (e) {
       if (!!e) {
         fail('Got an error authenticating with knappsack: ' + e.message);
       } else {
@@ -246,32 +237,27 @@ function doesVersionExistOnServer(options, accessToken) {
     deferred.reject();
   }
 
-  http.get(getOptions, function (response) {
-    var str = '';
-    response.on('data', function (chunk) {
-      str += chunk;
-    });
-
-    response.on('end', function () {
-      try {
-        if (response.statusCode !== 200) {
-          log.error('Grabbing version failed with status ' + response.statusCode);
-          deferred.reject();
-        } else {
-          var versionsThatExist = [];
-          var versionInfoArr = JSON.parse(str);
-          versionInfoArr.forEach(function (versionInfo) {
-            if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
-              versionsThatExist.push(versionInfo.versionName);
-            }
-          });
-          deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
-        }
-      } catch (e) {
-        fail(e);
+  function onVersionResponse(response, content) {
+    try {
+      if (response.statusCode !== 200) {
+        log.error('Grabbing version failed with status ' + response.statusCode);
+        deferred.reject();
+      } else {
+        var versionsThatExist = [];
+        var versionInfoArr = JSON.parse(content);
+        versionInfoArr.forEach(function (versionInfo) {
+          if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
+            versionsThatExist.push(versionInfo.versionName);
+          }
+        });
+        deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
       }
-    });
-  }).on('error', function (e) {
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  httpGet(getOptions, onVersionResponse).on('error', function (e) {
     fail ('Got an error trying to grab from server what are the current versions of the app: ' + e.message);
   });
 
@@ -318,4 +304,17 @@ function uploadBuildToKnappsack(options, accessToken) {
   });
 
   return deferred.promise;
+}
+
+function httpGet(options, responseCallback) {
+  return http.get(options, function onResponse(response) {
+    var str = '';
+    response.on('data', function readChunk(chunk) {
+      str += chunk;
+    });
+
+    response.on('end', function onResponseRead() {
+      responseCallback(response, str);
+    });
+  });
 }
