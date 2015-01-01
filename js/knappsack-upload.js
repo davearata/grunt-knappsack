@@ -171,26 +171,54 @@ function authenticate(options) {
   var authenticateUrl = authenticateUrlPrefix + '?client_id=mobile_api_client&client_secret=kzI7QNsbne8KOlS' +
   '&grant_type=password&username=' + options.username + '&password=' + options.password;
 
-  http.get(authenticateUrl, function (response) {
-    var str = '';
-    response.on('data', function (chunk) {
-      str += chunk;
-    });
+  var tryCount = 0;
+  var maxRetries = options.retries || 1;
 
-    response.on('end', function () {
-      if (response.statusCode !== 200) {
-        log.error('Authenticating failed with status ' + response.statusCode);
-        deferred.reject();
+  function fail(reason) {
+    log.error('Failed authentication. ' + tryCount - 1 + ' retries. Reason: ' + reason);
+    deferred.reject();
+  }
+
+  function callServer() {
+    http.get(authenticateUrl, function (response) {
+      try {
+        var str = '';
+        response.on('data', function (chunk) {
+          str += chunk;
+        });
+
+        response.on('end', function onResponse() {
+          try {
+            if (response.statusCode !== 200) {
+              log.error('Authenticating failed with status ' + response.statusCode);
+
+              if (tryCount++ < maxRetries) {
+                log.writeln('Retrying authentication (' + tryCount + ')');
+                callServer();
+              } else {
+                deferred.reject();
+              }
+            } else {
+              var authResponse = JSON.parse(str);
+              deferred.resolve(authResponse.access_token);
+            }
+          } catch (e) {
+            fail(e);
+          }
+        });
+      } catch (e) {
+        fail(e);
+      }
+    }).on('error', function (e) {
+      if (!!e) {
+        fail('Got an error authenticating with knappsack: ' + e.message);
       } else {
-        var authResponse = JSON.parse(str);
-        deferred.resolve(authResponse.access_token);
+        fail('Got an error authenticating with knappsack.');
       }
     });
-  }).on('error', function (e) {
-    log.error("Got an error trying to grab from server what are the current versions of the app: " + e.message);
-    deferred.reject();
-  });
+  }
 
+  callServer();
   return deferred.promise;
 }
 
@@ -208,6 +236,16 @@ function doesVersionExistOnServer(options, accessToken) {
     }
   };
 
+  function fail(reason) {
+    if (!!reason) {
+      log.error('Failed checking versions on server: ' + reason);
+    } else {
+      log.error('Failed checking versions on server');
+    }
+
+    deferred.reject();
+  }
+
   http.get(getOptions, function (response) {
     var str = '';
     response.on('data', function (chunk) {
@@ -215,23 +253,26 @@ function doesVersionExistOnServer(options, accessToken) {
     });
 
     response.on('end', function () {
-      if (response.statusCode !== 200) {
-        log.error('Grabbing version failed with status ' + response.statusCode);
-        deferred.reject();
-      } else {
-        var versionsThatExist = [];
-        var versionInfoArr = JSON.parse(str);
-        versionInfoArr.forEach(function (versionInfo) {
-          if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
-            versionsThatExist.push(versionInfo.versionName);
-          }
-        });
-        deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
+      try {
+        if (response.statusCode !== 200) {
+          log.error('Grabbing version failed with status ' + response.statusCode);
+          deferred.reject();
+        } else {
+          var versionsThatExist = [];
+          var versionInfoArr = JSON.parse(str);
+          versionInfoArr.forEach(function (versionInfo) {
+            if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
+              versionsThatExist.push(versionInfo.versionName);
+            }
+          });
+          deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
+        }
+      } catch (e) {
+        fail(e);
       }
     });
   }).on('error', function (e) {
-    log.error("Got an error trying to grab from server what are the current versions of the app: " + e.message);
-    deferred.reject();
+    fail ('Got an error trying to grab from server what are the current versions of the app: ' + e.message);
   });
 
   return deferred.promise;
