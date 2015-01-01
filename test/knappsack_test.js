@@ -161,6 +161,56 @@ exports.testTwoAuthenticationRetries = function testTwoAuthenticationRetries(tes
   ksackUpload(options, done, log);
 };
 
+exports.testTwoFetchVersionsRetries = function testTwoFetchVersionsRetries(test) {
+  test.expect(5);
+
+  var log = newCounterLog();
+
+  var accessTokenRequestPath = '/oauth/token?client_id=mobile_api_client&client_secret=kzI7QNsbne8KOlS&grant_type=password&username=testuser&password=testpwd'
+  var nockAccessTokenScope = nock('http://mydomain.com:123')
+    .get(accessTokenRequestPath).reply(200, {access_token: 'test-access-token'});
+
+  var appVersionsQueryPath = '/api/v1/applications/testappid/applicationVersions';
+  var appVersionsHeaders = {
+    reqheaders: {
+      'Authorization': 'Bearer test-access-token'
+    }
+  };
+  var nockVersionQueryScope = nock('http://mydomain.com:123', appVersionsHeaders)
+    .get(appVersionsQueryPath).reply(403)
+    .get(appVersionsQueryPath).reply(404)
+    .get(appVersionsQueryPath).reply(200, [{versionName: '1.0'}]);
+
+  var uploadPostPath = '/api/v1/applicationVersions';
+  var nockUploadScope = nock('http://mydomain.com:123')
+    .post(uploadPostPath).reply(200);
+
+  var options = {
+    knappsackHost: 'http://mydomain.com',
+    applicationId: 'testappid',
+    knappsackPort: 123,
+    knappsackPath: '',
+    file: 'test/fixtures/testing',
+    versionName: '1.0',
+    appState: 'GROUP_PUBLISH',
+    recentChanges: '',
+    username: 'testuser',
+    password: 'testpwd',
+    retries: 2
+  };
+
+  function done(status) {
+    test.ok(status !== false, 'done status');
+    test.ok(nockAccessTokenScope.isDone(), 'http access token request');
+    test.ok(nockVersionQueryScope.isDone(), 'http version query');
+    test.ok(nockUploadScope.isDone(), 'upload post');
+    test.equal(2, log.getErrorCount());
+    test.done();
+  }
+
+  ksackUpload(options, done, log);
+};
+
 exports.testAuthenticationFail = function testAuthenticationFail(test) {
   test.expect(3);
 

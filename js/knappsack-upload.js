@@ -237,30 +237,42 @@ function doesVersionExistOnServer(options, accessToken) {
     }
   }
 
-  function onVersionResponse(response, content) {
-    try {
-      if (response.statusCode !== 200) {
-        log.error('Grabbing version failed with status ' + response.statusCode);
-        deferred.reject();
-      } else {
-        var versionsThatExist = [];
-        var versionInfoArr = JSON.parse(content);
-        versionInfoArr.forEach(function (versionInfo) {
-          if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
-            versionsThatExist.push(versionInfo.versionName);
+  var tryCount = 0;
+  var maxRetries = options.retries || 1;
+
+  function fetchVersions() {
+    function onVersionResponse(response, content) {
+      try {
+        if (response.statusCode !== 200) {
+          log.error('Grabbing version failed with status ' + response.statusCode);
+
+          if (tryCount++ < maxRetries) {
+            log.writeln('Retrying fetch-versions (' + tryCount + ')');
+            fetchVersions();
+          } else {
+            deferred.reject();
           }
-        });
-        deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
+        } else {
+          var versionsThatExist = [];
+          var versionInfoArr = JSON.parse(content);
+          versionInfoArr.forEach(function (versionInfo) {
+            if (versionInfo.versionName.substr(0, options.versionName.length) === options.versionName) {
+              versionsThatExist.push(versionInfo.versionName);
+            }
+          });
+          deferred.resolve({versionsThatExist: versionsThatExist, accessToken: accessToken});
+        }
+      } catch (e) {
+        fail(e);
       }
-    } catch (e) {
-      fail(e);
     }
+
+    httpGet(getOptions, onVersionResponse).on('error', function (e) {
+      fail('Got an error trying to grab from server what are the current versions of the app: ' + e.message);
+    });
   }
 
-  httpGet(getOptions, onVersionResponse).on('error', function (e) {
-    fail ('Got an error trying to grab from server what are the current versions of the app: ' + e.message);
-  });
-
+  fetchVersions();
   return deferred.promise;
 }
 
