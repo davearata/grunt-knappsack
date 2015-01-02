@@ -99,6 +99,13 @@ Required
 
 The path to the file being uploaded
 
+#### options.retries
+Type: `Integer`
+Optional
+Default `1`
+
+If the authentication http request to the knappsack server fails with a non-200 response code, then retry the same call this many times.
+
 ### Usage Examples
 
 ```js
